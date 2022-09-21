@@ -222,20 +222,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _StartSphPos:
     Rho: 3
-    Theta: 0
-    Phi: 0
-  _SphMin:
-    Rho: 3
-    Theta: 0
-    Phi: 0
-  _SphMax:
-    Rho: 5
     Theta: 180
-    Phi: 360
-  _SphSpeed:
-    Rho: 1
-    Theta: 1
+    Phi: 90
+  _SphMin:
+    Rho: 2
+    Theta: 0
     Phi: 1
+  _SphMax:
+    Rho: 20
+    Theta: 0
+    Phi: 179
+  _SphSpeed:
+    Rho: -0.1
+    Theta: -0.6
+    Phi: -0.6
   _Target: {fileID: 2126142822}
 --- !u!1 &1721591030
 GameObject:
