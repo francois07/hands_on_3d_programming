@@ -5,7 +5,7 @@ using UnityEngine;
 public class Player : MonoBehaviour
 {
     [SerializeField] float translationSpeed_;
-    [SerializeField] float RotationSpeed_;
+    [SerializeField] float rotationSpeed_;
     Rigidbody rb_;
 
     void Awake()
@@ -38,11 +38,26 @@ public class Player : MonoBehaviour
         float vAxis = Input.GetAxisRaw("Vertical");
         float hAxis = Input.GetAxisRaw("Horizontal");
 
-        Vector3 moveVect = vAxis * transform.forward * Time.fixedDeltaTime * translationSpeed_;
-        Vector3 newPos = rb_.position + moveVect;
-        rb_.MovePosition(newPos);
 
-        // float rotAngle = hAxis * RotationSpeed_ * Time.deltaTime;
-        // rb_.MoveRotation(rotAngle);
+        // Teleportation mode
+        /* 
+        Vector3 moveVect = vAxis * transform.forward * Time.fixedDeltaTime * translationSpeed_;
+         Vector3 newPos = rb_.position + moveVect;
+         rb_.MovePosition(newPos); 
+         Quaternion qRot = Quaternion.AngleAxis(hAxis * rotationSpeed_ * Time.fixedDeltaTime, transform.up);
+         Quaternion qFinalOrient = qRot * transform.rotation;
+
+         rb_.MoveRotation(qFinalOrient); 
+        */
+
+        Vector3 targetVelocity = transform.forward * vAxis * Time.fixedDeltaTime * translationSpeed_;
+        Vector3 velocityChange = targetVelocity - rb_.velocity;
+
+        rb_.AddForce(velocityChange, ForceMode.VelocityChange);
+
+        Vector3 targetAngularVelocity = hAxis * rotationSpeed_ * transform.up * Time.fixedDeltaTime;
+        Vector3 angularVelocityChange = targetAngularVelocity - rb_.angularVelocity;
+
+        rb_.AddTorque(angularVelocityChange, ForceMode.VelocityChange);
     }
 }
