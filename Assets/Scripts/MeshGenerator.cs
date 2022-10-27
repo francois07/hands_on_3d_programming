@@ -2,26 +2,40 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using MyMathTools;
+using System.Linq;
 
 namespace MeshGenerator
 {
-
     public class MeshGenerator : MonoBehaviour
     {
         public delegate Vector3 ComputePositionDelegate(float kX, float kZ);
         public delegate Vector3 ComputeNormalDelegate(float kX, float kZ);
+        [Header("Heightmap")]
+        [SerializeField] Texture2D m_HeightMap;
+        [SerializeField][Range(0, 500)] int m_scale;
+
+        [Header("Resolution")]
+        [SerializeField][Range(0, 10000)] int m_Resolution;
+
+        [Header("Spline")]
+        [SerializeField] Transform[] m_SplineCtrlPts;
+        [SerializeField] AnimationCurve m_Width;
+        LTSpline m_Spline;
+
+        [Header("Texture")]
+        [SerializeField] int m_Speed;
+        [SerializeField] Material m_Material;
+
+        //[Header("TestHelix")]
+        //[SerializeField] float testHelixRadius;
+
         // Start is called before the first frame update
         void Start()
         {
             MeshFilter meshFilter = GetComponent<MeshFilter>();
-            meshFilter.mesh = createNormalizedPlaneXZMesh(100, 100,
-            (kX, kZ) =>
-            {
+            m_Spline = new LTSpline(m_SplineCtrlPts.Select((Transform t) => t.position).ToArray());
 
-                float height = Mathf.Sin(kX * Mathf.PI * 3) + Mathf.Cos(kZ * Mathf.PI * 4) + Mathf.Cos(kZ * Mathf.PI * 2) + Mathf.Sin(kX * Mathf.PI);
-                return new Vector3(Mathf.Lerp(-5, 5, kX), height, Mathf.Lerp(-5, 5, kZ));
-            }
-            );
+            meshFilter.mesh = createNormalizedPlaneXZMesh(1000, 1000, (kX, kZ) => computeSplinePosition(m_Width, kX, kZ));
 
             // MeshCollider meshCollider = GetComponent<MeshCollider>();
             // meshCollider.sharedMesh = meshFilter.mesh;
@@ -30,15 +44,17 @@ namespace MeshGenerator
         // Update is called once per frame
         void Update()
         {
-
+            m_Material.mainTextureOffset += new Vector2(0, m_Speed * Time.deltaTime);
         }
 
-        public Mesh createNormalizedPlaneXZMesh(int nSegmentsX, int nSegmentsZ, ComputePositionDelegate computePos = null, ComputeNormalDelegate computeNorm = null)
+        Mesh createNormalizedPlaneXZMesh(int nSegmentsX, int nSegmentsZ, ComputePositionDelegate computePos = null, ComputeNormalDelegate computeNorm = null)
         {
             int nVertices = (nSegmentsX + 1) * (nSegmentsZ + 1);
 
             Mesh mesh = new Mesh();
             mesh.name = "StripXZ";
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+
             Vector3[] vertices = new Vector3[nVertices];
             int[] triangles = new int[nSegmentsX * nSegmentsZ * 6];
             Vector3[] normals = new Vector3[nVertices];
@@ -88,19 +104,72 @@ namespace MeshGenerator
             mesh.uv = uv;
 
             mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
 
             return mesh;
         }
 
-        Mesh createSphericalMeshFromPlaneXZ(float radius, int nSegmentsX, int nSegmentsZ)
+        Vector3 computeSpherePosition(float radius, float kX, float kZ)
         {
-            ComputePositionDelegate sphereTrans = (kX, kZ) =>
-              {
-                  float coeff = Mathf.PI * 2;
-                  return CoordConvert.SphericalToCartesian(new Spherical(radius, coeff * kX, coeff * kZ));
-              };
+            float coeff = Mathf.PI * 2;
+            return CoordConvert.SphericalToCartesian(new Spherical(radius, coeff * kX, coeff * kZ));
+        }
 
-            return createNormalizedPlaneXZMesh(nSegmentsX, nSegmentsZ, sphereTrans);
+        Vector3 computeTorusPosition(float bigR, float smallR, float kX, float kZ)
+        {
+            float coeff = Mathf.PI * 2;
+
+            Cylindrical omegaCyl = new Cylindrical(bigR, coeff * kX, 0);
+            Vector3 omegaCar = CoordConvert.CylindricalToCartesian(omegaCyl);
+            Vector3 pCar = omegaCar.normalized * smallR * Mathf.Cos(coeff * kZ) + Vector3.up * smallR * Mathf.Sin(coeff * kZ);
+
+            return omegaCar + pCar;
+        }
+
+        Vector3 computeHelixPosition(float bigR, float smallR, int nTurns, float kX, float kZ)
+        {
+            float coeff = Mathf.PI * 2;
+
+            Cylindrical omegaCyl = new Cylindrical(bigR, nTurns * coeff * kX, 0);
+            Vector3 omegaCar = CoordConvert.CylindricalToCartesian(omegaCyl);
+            Vector3 pCar = omegaCar.normalized * smallR * Mathf.Cos(coeff * kZ) + Vector3.up * smallR * Mathf.Sin(coeff * kZ);
+
+            return omegaCar + pCar + Vector3.up * kX * smallR * 2 * nTurns;
+        }
+
+        Mesh createHeightmapPlane()
+        {
+            // float rand1 = 10 * Random.value;
+            // float rand2 = 10 * Random.value;
+            // float rand3 = 10 * Random.value;
+            // float rand4 = 10 * Random.value;
+            Mesh plane = createNormalizedPlaneXZMesh(1000, 1000, (kX, kZ) =>
+            {
+                Vector3 scaled = new Vector3(kX * m_Resolution, 0, kZ * m_Resolution);
+
+                float y = 255 - m_HeightMap.GetPixel(
+                    (int)(kX * m_HeightMap.width),
+                    (int)(kZ * m_HeightMap.width)
+                ).grayscale;
+
+
+                // float y = 4 * Mathf.PerlinNoise(rand1 + 2 * kX, rand2 + 2 * kZ)
+                //         + 1 * Mathf.PerlinNoise(rand3 + 10 * kX, rand4 + 10 * kZ)
+                //         + .125f * Mathf.PerlinNoise(100 * kX, 100 * kZ);
+
+                return scaled - Vector3.up * y * m_scale;
+            });
+
+            return plane;
+        }
+
+        Vector3 computeSplinePosition(AnimationCurve width, float kX, float kZ)
+        {
+            Vector3 pt = m_Spline.interp(kZ);
+            Vector3 tangent = (m_Spline.interp(kZ + 0.001f) - pt).normalized;
+            Vector3 ortho = Vector3.Cross(tangent, Vector3.forward);
+
+            return pt + ortho * (kX - 0.5f) * .5f * width.Evaluate(kZ);
         }
     }
 }
